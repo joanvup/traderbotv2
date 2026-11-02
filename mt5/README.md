@@ -6,8 +6,9 @@ terminal lo exporta a CSV y el bot lo lee desde la carpeta común.
 
 ## Instalación
 
-1. Copiar `GoldbotCalendarExport.mq5` y `.ex5` a:
-   `%APPDATA%\MetaQuotes\Terminal\73B7A2420D6397DFF9014A20F1201F97\MQL5\Experts\goldbot\`
+1. Abrir el terminal y `Archivo → Abrir carpeta de datos`: el nombre de esa carpeta es un
+   identificador **distinto en cada instalación**, no lo copies de otra máquina. Copiar
+   `GoldbotCalendarExport.mq5` a `<carpeta de datos>\MQL5\Experts\goldbot\`
    (o compilar desde MetaEditor, que deja el `.ex5` junto al `.mq5`).
 2. En MetaTrader 5: `Herramientas → Opciones → Expert Advisors` → marcar
    **Permitir trading algorítmico** (necesario para que los EAs se ejecuten).

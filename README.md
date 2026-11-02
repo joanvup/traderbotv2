@@ -31,6 +31,11 @@ pip install -e ".[dev]"
 cp .env.example .env   # opcional: credenciales y token del dashboard
 ```
 
+Para montar el bot en **otra máquina Windows** y dejarlo operativo —terminal, cuenta demo, puente
+de calendario, `.env`, arranque y checklist del primer día—, el manual paso a paso está en
+[`docs/instalacion_otra_maquina.md`](docs/instalacion_otra_maquina.md). El día a día (arranque,
+pausa, kill switch, revisión semanal) vive en [`docs/operacion_demo.md`](docs/operacion_demo.md).
+
 ## Fase 1: datos en vivo (solo lectura)
 
 ```bash
