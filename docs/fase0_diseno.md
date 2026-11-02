@@ -842,18 +842,29 @@ velas y recuentos de filas.
 ### 13.3 Honestidad de los datos
 
 Cada payload lleva `staleness` **por fuente** (`{as_of_utc, age_s, stale}`), no por página, y
-cada panel pinta su propia etiqueta. Hay dos clases, y la distinción es lo que evita que la
-página amanezca en ámbar permanente:
+cada panel pinta su propia etiqueta. La regla de fondo es que **cada fuente se juzga con la
+cadencia con la que escribe**: con un umbral único para todo, los paneles de un bot perfecto
+amanecen en ámbar permanente porque miden una cadencia lenta con un reloj rápido. Es el defecto
+que se corrigió en tres pasos el 2026-11-02 (§12.1 paso 2, #76 y #80), y así queda hoy:
 
-- **Fuente de ciclo** (`bot_state`, `equity_snapshots`): la escribe el bucle del bot, así que
-  `stale_after_s` (15 s, frente a un sondeo real de ~5 s) marca el corte. "dato atrasado ·
-  hace 2 h". La foto de equity la mete el sondeo de datos de cada modo —`poll_once` sin
-  `--execute`, `refresh_bars` con él— y una fila por minuto, que es la cadencia real del upsert.
-  Hasta el 2026-11-02 `refresh_bars` no la escribía: con `--execute` el gráfico quedaba clavado en
-  el valor del arranque y el panel lo pintaba como si el enlace se hubiera caído (§12.1 paso 2).
-- **Fuente de registro** (`trades`, `events`, `log_lines`): tablas append-only que sólo crecen
-  cuando pasa algo. Aquí la antigüedad es informativa y se pinta en neutro: "último registro
-  hace 6 h". Un panel de historial no está "atrasado" porque nadie haya operado.
+| Fuente | Quién la escribe | Umbral con el que se juzga |
+| --- | --- | --- |
+| `bot_state`, `account`, `health`, `positions` | cada poll (el timer de `_health_cycle` publica estado aunque no haya vela nueva) | `dashboard.stale_after_s` (15 s frente a un sondeo real de ~5 s) |
+| `decision`, `context`, `daily` (PnL por día) | `run_cycle`, que solo corre con vela cerrada del marco de decisión | `data.stale_after_s[<tf>]` (M5 → 360 s = una vela + margen) |
+| `equity_series` | upsert de `equity_snapshots`, **una foto por minuto** | `dashboard.equity_stale_after_s` (120 s; la fila lleva la marca del minuto en curso, así que la edad del último punto sube de 0 a ~60 s y vuelve a caer —medido en demo con un poll de 5 s—) |
+| `trades`, `events`, `log_lines` | tablas append-only que sólo crecen cuando pasa algo | no caducan: la antigüedad es informativa y se pinta en neutro ("último registro hace 6 h"). Un panel de historial no está "atrasado" porque nadie haya operado |
+
+`positions` tiene una excepción más, y es la que revela que el umbral no era el único problema:
+con la tabla vacía no había ningún `updated_at_utc` que mirar, así que el chip se quedaba ámbar
+**en el estado deseado del bot** (operar 0 veces al día es válido y deseable). Ahora, sin filas,
+su frescura es la del ciclo que concilia contra el broker —`bot_state`— y el panel lo dice con
+todas las letras: `sin posiciones · hace 12 s` en verde. Ámbar solo si ese ciclo muere, que es
+lo que realmente hay que vigilar.
+
+La foto de equity la mete el sondeo de datos de cada modo —`poll_once` sin `--execute`,
+`refresh_bars` con él—. Hasta el 2026-11-02 `refresh_bars` no la escribía: con `--execute` el
+gráfico quedaba clavado en el valor del arranque y el panel lo pintaba como si el enlace se
+hubiera caído (§12.1 paso 2).
 
 Si `bot_state` falta o está viejo, la cabecera muestra el banner `⚠ … Se muestran los últimos
 datos conocidos; no se rellena ni se interpola`, y el kill switch, el candado diario y un

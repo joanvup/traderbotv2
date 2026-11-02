@@ -179,6 +179,10 @@ def build_read_router(
     decision_after_s = max(
         stale_after_s, int(_cadencia.get(str(config.data.decision_timeframe), 360))
     )
+    # La curva de equity tampoco sigue la cadencia del poll: la fila se guarda con la marca del
+    # minuto en curso, así que la edad del último punto real sube de 0 a ~60 s y vuelve a caer.
+    # Con los 15 s del poll el gráfico viviría ambarado la mayor parte del minuto.
+    equity_after_s = max(stale_after_s, int(config.dashboard.equity_stale_after_s))
 
     def server_time_block() -> dict[str, Any]:
         now = clock.now_utc()
@@ -345,9 +349,17 @@ def build_read_router(
                 ),
                 "health": rm.stale_flag((health or {}).get("checked_at_utc")),
                 "decision": rm.stale_flag((latest or {}).get("ts_utc"), after_s=decision_after_s),
-                "equity_series": rm.stale_flag(last_equity_row["last_ts_utc"]),
+                "equity_series": rm.stale_flag(
+                    last_equity_row["last_ts_utc"], after_s=equity_after_s
+                ),
+                # Sin posiciones abiertas no hay ninguna fila que pueda estar atrasada: la lista
+                # vacía la garantiza el ciclo que concilia contra el broker, así que su frescura
+                # es la de `bot_state`. Juzgarla con `default=None` dejaba el chip ambarado de
+                # forma permanente justo cuando el bot está plano, que es el estado deseado.
                 "positions": rm.stale_flag(
                     max((str(p["updated_at_utc"]) for p in positions), default=None)
+                    if positions
+                    else (state or {}).get("updated_at_utc")
                 ),
             },
             "feed_freshness": freshness,
@@ -440,7 +452,7 @@ def build_read_router(
                 "max_equity": _number(grid["max_equity"]),
                 "last_equity": _number(grid["last_equity"]),
             },
-            "staleness": rm.stale_flag(grid["last_ts_utc"]),
+            "staleness": rm.stale_flag(grid["last_ts_utc"], after_s=equity_after_s),
         }
 
     @router.get("/api/charts/daily-pnl")
@@ -469,7 +481,10 @@ def build_read_router(
                 for row in rows
             ],
             "staleness": {
-                "daily": rm.stale_flag(max((str(r["updated_at_utc"]) for r in rows), default=None))
+                "daily": rm.stale_flag(
+                    max((str(r["updated_at_utc"]) for r in rows), default=None),
+                    after_s=decision_after_s,
+                )
             },
         }
 

@@ -237,6 +237,11 @@ class DashboardSection(Section):
     port: int = Field(default=8787, ge=1024, le=65535)
     token_env: str = "DASHBOARD_TOKEN"
     stale_after_s: int = Field(default=15, ge=1)
+    # El gráfico de equity no sigue la cadencia del poll: `equity_snapshots` se guarda con la
+    # marca del minuto en curso, así que la edad del último punto real sube de 0 a ~60 s y
+    # vuelve a caer (medido en demo con poll de 5 s). Con el umbral de poll el gráfico estaría
+    # ambarado casi siempre; 120 s deja pasar un minuto entero y sigue detectando un sondeo muerto.
+    equity_stale_after_s: int = Field(default=120, ge=5, le=600)
     refresh_s: int = Field(default=3, ge=1, le=60)
     close_all_enabled: bool = True
     # `CLOSE_ALL` caduca: cerrar posiciones horas después de que el operador lo pidió no

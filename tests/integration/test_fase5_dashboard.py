@@ -749,6 +749,85 @@ def test_la_decision_se_mide_con_el_paso_de_vela_no_con_el_poll(
     assert client_tarde.get("/api/overview").json()["staleness"]["decision"]["stale"] is True
 
 
+def test_la_curva_de_equity_se_mide_con_su_minuto_no_con_el_poll(
+    seeded: tuple[Path, _FrozenClock, TestClient]
+) -> None:
+    """Una foto por minuto no es un poll cada 5 s: el gráfico de equity tiene su propio umbral.
+
+    `equity_snapshots` se guarda con la marca del minuto en curso, así que la edad del último
+    punto real sube de 0 a ~60 s y vuelve a caer (medido en demo con poll de 5 s). Con
+    `stale_after_s: 15` el panel viviría ambarado enseñando una curva perfecta.
+    """
+    db_path, _, _ = seeded
+    client = _client(db_path, _FrozenClock(NOW), _config())
+
+    # La base sembrada tiene su última foto justo un minuto antes de NOW.
+    overview = client.get("/api/overview").json()
+    assert overview["staleness"]["equity_series"]["age_s"] == pytest.approx(60, abs=1)
+    assert overview["staleness"]["equity_series"]["stale"] is False
+
+    charts = client.get("/api/charts/equity").json()
+    assert charts["staleness"]["stale"] is False
+
+    # Un minuto entero sin foto nueva todavía es la cadencia normal; dos sí es un sondeo muerto.
+    # Y el umbral es configuración: bajándolo a 5 s vuelve el ámbar con la misma base.
+    tarde = _client(db_path, _FrozenClock(NOW + timedelta(seconds=130)), _config())
+    assert tarde.get("/api/overview").json()["staleness"]["equity_series"]["stale"] is True
+    assert tarde.get("/api/charts/equity").json()["staleness"]["stale"] is True
+    apretado = _client(db_path, _FrozenClock(NOW), _config(equity_stale_after_s=5))
+    assert apretado.get("/api/overview").json()["staleness"]["equity_series"]["stale"] is True
+
+
+def test_el_pnl_diario_se_mide_con_la_vela_de_decision(
+    seeded: tuple[Path, _FrozenClock, TestClient]
+) -> None:
+    """`daily_stats` solo se reescribe dentro de `run_cycle`, o sea con vela nueva del marco.
+
+    Medirlo con el reloj del poll ambraba el panel de PnL diario en cuanto el bot dejaba de
+    publicar la foto de estado, aunque siguiera cerrando velas y registrando el día.
+    """
+    db_path, _, _ = seeded
+    client = _client(db_path, _FrozenClock(NOW + timedelta(seconds=120)), _config())
+    daily = client.get("/api/charts/daily-pnl").json()
+    assert daily["staleness"]["daily"]["stale"] is False
+    assert daily["staleness"]["daily"]["age_s"] == pytest.approx(120, abs=1)
+
+    # Pasadas dos velas sin ciclo, el PnL diario sí está atrasado.
+    tarde = _client(db_path, _FrozenClock(NOW + timedelta(seconds=400)), _config())
+    assert tarde.get("/api/charts/daily-pnl").json()["staleness"]["daily"]["stale"] is True
+
+
+def test_sin_posiciones_abiertas_no_es_dato_atrasado(tmp_path: Path) -> None:
+    """La lista vacía la garantiza el ciclo que reconcilia: sin posiciones su frescura es la del ciclo.
+
+    Con `positions` vacía no había `updated_at_utc` que mirar y el chip del panel de posiciones
+    se quedaba en ámbar permanente — justo en el estado deseado del bot, que operar 0 veces es
+    válido. Aquí verde mientras el ciclo que reconcilia esté vivo, y ámbar si ese ciclo muere.
+    """
+    clock = _FrozenClock()
+    db_path = tmp_path / "state.db"
+    store = _seed(db_path, clock)
+    store.delete_position(5_510_001)
+    client = _client(db_path, clock, _config())
+
+    overview = client.get("/api/overview").json()
+    assert overview["positions"] == []
+    assert overview["staleness"]["positions"]["stale"] is False
+    assert overview["staleness"]["positions"]["age_s"] == pytest.approx(0, abs=1)
+
+    # Sin posiciones *y* sin ciclo también es un enlace caído: el verde no tapa el fallo.
+    tarde = _client(db_path, _FrozenClock(NOW + timedelta(minutes=10)), _config())
+    assert tarde.get("/api/overview").json()["staleness"]["positions"]["stale"] is True
+
+    # Y el frontend lo dice con letras, no sólo con color: existe la variante `flat` del chip y
+    # el panel de posiciones la pide precisamente cuando la lista llega vacía.
+    js = (
+        Path(__file__).resolve().parents[2] / "src" / "goldbot" / "dashboard" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+    assert "sin posiciones · " in js
+    assert 'flat ? "flat" : "ciclo"' in js
+
+
 # ---------------------------------------------------------------------------
 # Comandos: token, idempotencia, caducidad y límites
 # ---------------------------------------------------------------------------

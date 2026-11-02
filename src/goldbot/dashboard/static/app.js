@@ -133,7 +133,9 @@ function text(id, value) {
  * `ciclo` (por defecto) son las fuentes que el bot debe refrescar cada vela cerrada: si
  * envejecen, el enlace falló y hay que avisar en ámbar. `registro` son las tablas de sólo
  * inserción (eventos, log, operaciones): que no haya filas nuevas es lo normal en un
- * mercado tranquilo, así que su insignia informa sin alarmar.
+ * mercado tranquilo, así que su insignia informa sin alarmar. `flat` es el mismo aviso que
+ * `ciclo` pero con el texto del caso normal: sin posiciones abiertas no hay fila que pueda
+ * estar atrasada, y lo que se vigila es que el ciclo que reconcilia siga vivo.
  */
 function setStale(name, entry, kind = "ciclo") {
   document.querySelectorAll(`[data-stale="${name}"]`).forEach((node) => {
@@ -151,7 +153,11 @@ function setStale(name, entry, kind = "ciclo") {
     }
     const stale = Boolean(entry.stale);
     node.className = `stale ${stale ? "stale-on" : "stale-ok"}`;
-    node.textContent = stale ? `dato atrasado · ${fmtAge(entry.age_s)}` : fmtAge(entry.age_s);
+    node.textContent = stale
+      ? `dato atrasado · ${fmtAge(entry.age_s)}`
+      : kind === "flat"
+        ? `sin posiciones · ${fmtAge(entry.age_s)}`
+        : fmtAge(entry.age_s);
     node.title = `Última escritura: ${dash(entry.as_of_utc)} (UTC)`;
   });
 }
@@ -415,7 +421,10 @@ function renderChips(ov) {
     : `<div class="tiny muted">El bot no publicó frescura de velas todavía.</div>`);
 
   ["bot_state", "account", "context", "health", "decision", "equity_series", "positions"]
-    .forEach((key) => setStale(key, (ov.staleness || {})[key]));
+    .forEach((key) => {
+      const flat = key === "positions" && (ov.positions || []).length === 0;
+      setStale(key, (ov.staleness || {})[key], flat ? "flat" : "ciclo");
+    });
 }
 
 /* -- panel 4: cerebro ------------------------------------------------------- */

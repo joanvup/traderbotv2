@@ -118,6 +118,16 @@ Detalles que importan:
   `refresh_bars` con él), así que si el gráfico lleva horas clavado en un número mientras
   `bot_state` sigue avanzando no era el enlace, era que ese sondeo no escribía la fila; y el
   upsert es uno por minuto, no por poll, así que "hace 40 s" es sano y no un hueco.
+- **Cada chip, su cadencia** (§13.3 del diseño): un panel puede estar perfecto y salir en ámbar si se
+  mide con el reloj equivocado —fallo visto en vivo el 2026-11-02—. `dashboard.stale_after_s` (15 s) es
+  el reloj de lo que se escribe en cada poll (`bot_state`, `account`, `health`); `decision`, `context` y
+  la barra de PnL por día se juzgan con la cadencia del marco de decisión (`data.stale_after_s.M5` =
+  360 s) porque solo se reescriben con vela cerrada; y la curva de equity se juzga con
+  `dashboard.equity_stale_after_s` (120 s) porque su upsert es una foto por minuto. Con el bot plano el
+  chip de posiciones dice `sin posiciones · hace X` en verde: sin filas no hay dato que pueda estar
+  atrasado, y lo que se vigila es que el ciclo que concilia con el broker siga vivo (si ese se para, el
+  chip vuelve a ámbar). Lo que **sí** debe salir ámbar con el mercado cerrado —el corte diario del
+  broker, el fin de semana— son `decision`, `context` y `feed_status`: no hay vela nueva que cerrar.
 - **Chip `entradas` en rojo**: la puerta de entradas la cierran exactamente dos cosas, el marco de
   decisión (M5) sin vela cerrada dentro de `data.stale_after_s.M5` (360 s) o un tick más viejo que
   `data.max_feed_age_s` (120 s). El bloque `feed_freshness` del panel lista también H1/H4/D1: esos son
