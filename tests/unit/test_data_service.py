@@ -332,3 +332,57 @@ def test_startup_without_history_reuses_cache(tmp_path: Path) -> None:
     assert result.new_bars == ()
     with sqlite3.connect(tmp_path / "state.db") as conn:
         assert conn.execute("SELECT COUNT(*) FROM history_sync").fetchone()[0] == len(Timeframe)
+
+
+def test_refresh_bars_deja_su_foto_de_equity_sin_pisar_el_estado(tmp_path: Path) -> None:
+    """El modo `--execute` sondea con `refresh_bars`, y esa ruta se había saltado el equity.
+
+    Sin foto periódica el gráfico de 24 h quedaba clavado en el valor del arranque y la
+    revisión semanal auditaba `MARGEN_LIBRE` con una sola muestra, tomada antes de que
+    hubiera posiciones abiertas. Lo que NO debe pasar es que esta escritura se lleve por
+    delante `bot_state`: ese lo decide el `Bot`.
+    """
+    service, _, clock = _service(tmp_path)
+    service.startup()
+    with sqlite3.connect(tmp_path / "state.db") as conn:
+        estado_antes = conn.execute(
+            "SELECT cycle_seq, state, feed_status FROM bot_state"
+        ).fetchone()
+
+    clock.sleep_until(clock.now_utc() + timedelta(minutes=1))
+    service.refresh_bars()
+
+    with sqlite3.connect(tmp_path / "state.db") as conn:
+        filas = conn.execute(
+            "SELECT source, equity, margin_free, floating_pnl, positions_count "
+            "FROM equity_snapshots ORDER BY ts_utc"
+        ).fetchall()
+        estado_despues = conn.execute(
+            "SELECT cycle_seq, state, feed_status FROM bot_state"
+        ).fetchone()
+    assert [fila[0] for fila in filas] == ["STARTUP", "PERIODIC"]
+    assert filas[-1][1] == pytest.approx(1_004.0)
+    assert filas[-1][2] == pytest.approx(900.0)
+    assert filas[-1][3] == pytest.approx(4.0)
+    assert filas[-1][4] == 0
+    assert estado_despues == estado_antes, "refresh_bars no publica bot_state: lo escribe el Bot"
+
+
+def test_refresh_bars_tambien_rechaza_una_cuenta_que_dejo_de_ser_demo(tmp_path: Path) -> None:
+    """El candado de demo tenía que estar en los dos caminos, no solo en el de lectura.
+
+    El terminal puede cambiar de cuenta a mitad de sesión (relogin, migración de servidor).
+    Si solo `poll_once` miraba `is_demo`, el bucle de ejecución seguía mandando órdenes a
+    una cuenta real.
+    """
+    service, broker, clock = _service(tmp_path)
+    service.startup()
+    broker._demo = False
+    clock.sleep_until(clock.now_utc() + timedelta(minutes=1))
+
+    with pytest.raises(RuntimeError, match="DEMO"):
+        service.refresh_bars()
+
+    with sqlite3.connect(tmp_path / "state.db") as conn:
+        tipos = [row[0] for row in conn.execute("SELECT type FROM events")]
+    assert "KILL_SWITCH" in tipos

@@ -113,7 +113,11 @@ Detalles que importan:
   supera el 1 %, eso sí es `FALLO RIESGO_POR_OPERACION` y hay que parar.
 - **Huecos del feed**: si el panel de equity aparece atrasado ("hace 3 min") el enlace se cayó; el
   bot reintenta con backoff y **no abre nada nuevo** hasta recuperar datos fiables. Eso es
-  correcto, no lo "arregles" reiniciando cada dos minutos.
+  correcto, no lo "arregles" reiniciando cada dos minutos. Dos matices vistos en vivo el
+  2026-11-02: la foto de equity la escribe el sondeo de datos (`poll_once` sin `--execute`,
+  `refresh_bars` con él), así que si el gráfico lleva horas clavado en un número mientras
+  `bot_state` sigue avanzando no era el enlace, era que ese sondeo no escribía la fila; y el
+  upsert es uno por minuto, no por poll, así que "hace 40 s" es sano y no un hueco.
 - **Chip `entradas` en rojo**: la puerta de entradas la cierran exactamente dos cosas, el marco de
   decisión (M5) sin vela cerrada dentro de `data.stale_after_s.M5` (360 s) o un tick más viejo que
   `data.max_feed_age_s` (120 s). El bloque `feed_freshness` del panel lista también H1/H4/D1: esos son

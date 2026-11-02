@@ -345,18 +345,29 @@ class DataService:
         )
 
     def refresh_bars(self, *, now: datetime | None = None) -> DataStatus:
-        """Refresca velas y recalcula el analisis, sin publicar estado.
+        """Refresca velas y equity, recalcula el análisis, sin publicar estado.
 
-        Lo usa el bucle de ejecucion de la Fase 4: ahi el `Bot` es el unico que escribe
+        Lo usa el bucle de ejecución de la Fase 4: ahí el `Bot` es el único que escribe
         `bot_state` (latch del kill switch, pausa, salud del terminal). Si el servicio
-        publicara tambien su estado, borraria el latch y la salud entre las dos escrituras
-        del mismo ciclo y el panel mostraria un bot sin candados durante unos milisegundos.
-        Aqui solo se aporta la parte de datos; el estado general lo decide el bot.
+        publicara también su estado, borraría el latch y la salud entre las dos escrituras
+        del mismo ciclo y el panel mostraría un bot sin candados durante unos milisegundos.
+        Aquí solo se aporta la parte de datos; el estado general lo decide el bot.
+
+        El equity no cae dentro de esa exclusión: `equity_snapshots` es histórico, no
+        estado vivo. El modo `--execute` se saltaba esta escritura y la única fila del
+        proceso era la STARTUP del arranque, así que durante horas el gráfico de 24 h
+        mostraba un número congelado y la revisión semanal auditaba `MARGEN_LIBRE` con una
+        sola muestra tomada antes de que hubiera posiciones abiertas. Se escribe aquí, con
+        la misma cadencia de minuto que `poll_once`.
         """
         moment = now or self._clock.now_utc()
+        account = self._broker.account()
+        self._guard_demo(account)
+        self._account = account
         feed, new_bars = self._refresh_feed(moment)
         overall = self._overall(feed, self._tick_age(moment))
         self._last_overall = overall
+        self._snapshot_equity(account, source="PERIODIC", now=moment)
         if not self._analysis_disabled and self._analyzer is not None:
             if any(timeframe is self._decision_tf for timeframe, _ in new_bars):
                 self._run_analysis(moment)

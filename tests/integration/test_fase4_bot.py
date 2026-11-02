@@ -604,6 +604,32 @@ def test_sl_del_servidor_se_reconcilia_en_trades_y_daily_stats(tmp_path: Path) -
     assert rig.store.read_open_positions() == {}
 
 
+def test_el_equity_de_cierre_del_dia_se_escribe_en_cada_ciclo(tmp_path: Path) -> None:
+    """`daily_stats.equity_end` no queda NULL: es la foto del ciclo, no la del arranque.
+
+    Sin cierre, el gráfico de 14 días del dashboard pinta el día vacío y la revisión
+    semanal no puede contrastar `realized_pnl` contra el movimiento del equity. El valor
+    que se guarda es el equity que el bot ve al empezar el ciclo, así que tras el SL del
+    servidor tiene que reflejar ya la pérdida realizada (balance 1000 − 8.42).
+    """
+    rig = _rig(tmp_path)
+    rig.bot.run_cycle(rig.analysis)
+
+    dia = _rows(rig.db_path, "SELECT equity_start, equity_end FROM daily_stats")[0]
+    assert dia["equity_start"] == pytest.approx(1_000.0)
+    assert dia["equity_end"] == pytest.approx(1_000.0), "el primer ciclo arranca sin posición"
+
+    rig.sim.advance(_bar(2_395.0, 2_394.0, 2_396.0))  # el SL salta en el servidor
+    rig.bot.run_cycle(rig.analysis)
+
+    dia = _rows(rig.db_path, "SELECT equity_start, equity_end FROM daily_stats")[0]
+    # El arranque del día es inamovible; el cierre se reescribe con la equity actual.
+    assert dia["equity_start"] == pytest.approx(1_000.0)
+    assert dia["equity_end"] == pytest.approx(rig.sim.account().equity)
+    assert dia["equity_end"] < dia["equity_start"]
+    assert 1_000.0 - float(dia["equity_end"]) == pytest.approx(8.42, abs=0.01)
+
+
 def test_la_perdida_diaria_maxima_bloquea_el_dia(tmp_path: Path) -> None:
     """0.84% perdido con `daily_loss_pct=0.5`: el día queda candado hasta el siguiente."""
     rig = _rig(tmp_path, daily_loss_pct=0.5)

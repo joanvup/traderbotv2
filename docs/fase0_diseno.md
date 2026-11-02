@@ -390,7 +390,12 @@ enviar una sola orden real**: la prueba de ejecución corre contra `SimulatorBro
 
 1. Lecturas del broker (`account`, posiciones, `health`). Un fallo **no** lanza: registra,
    aplica backoff y bloquea nuevas entradas (§12.7).
-2. `ensure_day(equity)` para que el candado de pérdida diaria tenga la referencia de arranque.
+2. `ensure_day(equity)` para que el candado de pérdida diaria tenga la referencia de arranque y
+   `record_equity_end(equity)` para cerrar el día. El cierre se reescribe en cada ciclo: cuando el
+   día deja de ser hoy la última escritura queda congelada, y ese es su equity de cierre. Hasta el
+   2026-11-02 este paso no existía, así que `daily_stats.equity_end` era NULL en todas las filas y
+   el auditor `EQUITY_FLOOR` de la revisión semanal descartaba el día por pedir `equity_end` no
+   nulo (§16.3).
 3. Evaluación del kill switch.
 4. **Reconciliación de deals** antes de decidir nada: devuelve los tickets que ya no están en
    el broker y se descartan de la lista local. Sin este descarte la gestión intentaría
@@ -841,7 +846,10 @@ página amanezca en ámbar permanente:
 
 - **Fuente de ciclo** (`bot_state`, `equity_snapshots`): la escribe el bucle del bot, así que
   `stale_after_s` (15 s, frente a un sondeo real de ~5 s) marca el corte. "dato atrasado ·
-  hace 2 h".
+  hace 2 h". La foto de equity la mete el sondeo de datos de cada modo —`poll_once` sin
+  `--execute`, `refresh_bars` con él— y una fila por minuto, que es la cadencia real del upsert.
+  Hasta el 2026-11-02 `refresh_bars` no la escribía: con `--execute` el gráfico quedaba clavado en
+  el valor del arranque y el panel lo pintaba como si el enlace se hubiera caído (§12.1 paso 2).
 - **Fuente de registro** (`trades`, `events`, `log_lines`): tablas append-only que sólo crecen
   cuando pasa algo. Aquí la antigüedad es informativa y se pinta en neutro: "último registro
   hace 6 h". Un panel de historial no está "atrasado" porque nadie haya operado.
