@@ -391,10 +391,11 @@ enviar una sola orden real**: la prueba de ejecución corre contra `SimulatorBro
 1. Lecturas del broker (`account`, posiciones, `health`). Un fallo **no** lanza: registra,
    aplica backoff y bloquea nuevas entradas (§12.7).
 2. `ensure_day(equity)` para que el candado de pérdida diaria tenga la referencia de arranque y
-   `record_equity_end(equity)` para cerrar el día. El cierre se reescribe en cada ciclo: cuando el
-   día deja de ser hoy la última escritura queda congelada, y ese es su equity de cierre. Hasta el
-   2026-11-02 este paso no existía, así que `daily_stats.equity_end` era NULL en todas las filas y
-   el auditor `EQUITY_FLOOR` de la revisión semanal descartaba el día por pedir `equity_end` no
+   `record_equity_end(equity)` para cerrar el día. El cierre se reescribe en cada ciclo, y un
+   ciclo solo corre con vela nueva del marco de decisión: lo que queda congelado al cambiar el
+   día es **el equity del último ciclo del día**, no el de la medianoche. Hasta el 2026-11-02
+   este paso no existía, así que `daily_stats.equity_end` era NULL en todas las filas y el
+   auditor `EQUITY_FLOOR` de la revisión semanal descartaba el día por pedir `equity_end` no
    nulo (§16.3).
 3. Evaluación del kill switch.
 4. **Reconciliación de deals** antes de decidir nada: devuelve los tickets que ya no están en
