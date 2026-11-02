@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>goldbot — XAUUSD</title>
+  <link rel="stylesheet" href="vendor/uPlot.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Banner rojo: sólo visible si la cuenta publicada NO es demo. Es lo primero que se pinta
+       porque el resto de la pantalla carece de sentido si se opera en real. -->
+  <div id="banner-live" class="banner banner-danger hidden">
+    CUENTA NO DEMO — el bot está diseñado para rechazar operar aquí. Detén el proceso y revisa
+    <code>mt5.account</code>.
+  </div>
+  <div id="banner-degraded" class="banner banner-warn hidden"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <h1>goldbot <span id="hdr-symbol" class="mono">—</span></h1>
+      <div id="hdr-context" class="context">sin estado publicado</div>
+    </div>
+    <div class="topbar-right">
+      <div id="hdr-state" class="state state-unknown">SIN DATOS</div>
+      <div class="clock">
+        <div id="hdr-server-time" class="mono big">--:--:--</div>
+        <div id="hdr-server-zone" class="tiny muted">hora del servidor</div>
+      </div>
+      <div class="clock">
+        <div id="hdr-uptime" class="mono">—</div>
+        <div class="tiny muted">activo desde el último STARTUP</div>
+      </div>
+      <div class="controls">
+        <button id="btn-pause" class="btn" type="button">Pausar</button>
+        <button id="btn-resume" class="btn" type="button">Reanudar</button>
+        <button id="btn-close-all" class="btn btn-danger" type="button">Cerrar todo</button>
+        <button id="btn-reset-kill" class="btn btn-danger" type="button" hidden>Rearmar kill switch</button>
+      </div>
+      <div class="tokenbox">
+        <label for="token" class="tiny muted">token</label>
+        <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="DASHBOARD_TOKEN" />
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 2 · KPIs -->
+    <section class="card" id="sec-kpis">
+      <div class="card-head">
+        <h2>Cuenta y riesgo del día</h2>
+        <span class="stale" data-stale="account"></span>
+      </div>
+      <div class="kpis" id="kpis"></div>
+      <div class="limit-bar">
+        <div class="limit-head">
+          <span>Pérdida diaria máxima usada</span>
+          <span id="limit-text" class="mono">—</span>
+        </div>
+        <div class="track"><div id="limit-fill" class="fill"></div></div>
+        <div id="limit-base" class="tiny muted">—</div>
+      </div>
+    </section>
+
+    <!-- 3 · Chips de estado -->
+    <section class="card" id="sec-chips">
+      <div class="card-head">
+        <h2>Estado del enlace y del mercado</h2>
+        <span class="stale" data-stale="context"></span>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="feed" id="feed"></div>
+    </section>
+
+    <div class="grid-2">
+      <!-- 4 · Cerebro -->
+      <section class="card" id="sec-brain">
+        <div class="card-head">
+          <h2>Cerebro</h2>
+          <span class="stale" data-stale="decision"></span>
+        </div>
+        <div id="brain-regime" class="brain-block"></div>
+        <div id="brain-probs" class="brain-block probs"></div>
+        <div id="brain-playbook" class="brain-block"></div>
+        <div id="brain-filters" class="brain-block"></div>
+        <div id="brain-bias" class="brain-block"></div>
+        <div id="brain-levels" class="brain-block"></div>
+        <div id="brain-history" class="brain-block scroll-x"></div>
+      </section>
+
+      <div class="col">
+        <!-- 5 · Posiciones abiertas -->
+        <section class="card" id="sec-positions">
+          <div class="card-head">
+            <h2>Posiciones abiertas</h2>
+            <span class="stale" data-stale="positions"></span>
+          </div>
+          <div id="positions" class="scroll-x"></div>
+        </section>
+
+        <!-- 6 · Gráficos -->
+        <section class="card" id="sec-charts">
+          <div class="card-head">
+            <h2>Equity 24 h · entradas (▲) y salidas (▼)</h2>
+            <span class="stale" data-stale="equity_series"></span>
+          </div>
+          <div id="chart-equity" class="plot"></div>
+          <div id="equity-note" class="tiny muted">—</div>
+          <div class="card-head sub">
+            <h3>PnL realizado por día (14 días)</h3>
+            <span class="stale" data-stale="daily"></span>
+          </div>
+          <div id="chart-daily" class="plot short"></div>
+          <div id="daily-note" class="tiny muted">—</div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 7 · Historial de operaciones cerradas -->
+    <section class="card" id="sec-trades">
+      <div class="card-head">
+        <h2>Operaciones cerradas</h2>
+        <div class="filters">
+          <button class="chip-btn" type="button" data-days="7">7 d</button>
+          <button class="chip-btn is-on" type="button" data-days="30">30 d</button>
+          <button class="chip-btn" type="button" data-days="90">90 d</button>
+        </div>
+        <span class="stale" data-stale="trades"></span>
+      </div>
+      <div id="trades-summary" class="summary"></div>
+      <div id="trades" class="scroll-x"></div>
+    </section>
+
+    <div class="grid-2">
+      <!-- 8 · Eventos -->
+      <section class="card" id="sec-events">
+        <div class="card-head">
+          <h2>Eventos (últimos 60)</h2>
+          <span class="stale" data-stale="events"></span>
+        </div>
+        <div id="events" class="feed-list"></div>
+      </section>
+
+      <!-- 9 · Log -->
+      <section class="card" id="sec-logs">
+        <div class="card-head">
+          <h2>Log del bot (últimas 160)</h2>
+          <label class="tiny muted switch">
+            <input id="autoscroll" type="checkbox" checked /> auto-desplazar
+          </label>
+          <span class="stale" data-stale="logs"></span>
+        </div>
+        <div id="logs" class="log-list"></div>
+      </section>
+    </div>
+
+    <!-- Auditoría de comandos e intentos de orden -->
+    <section class="card" id="sec-audit">
+      <div class="card-head">
+        <h2>Comandos recibidos e intentos de orden</h2>
+      </div>
+      <div class="grid-2">
+        <div id="commands" class="scroll-x"></div>
+        <div id="attempts" class="scroll-x"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 10 · Pie -->
+  <footer id="footer" class="footer mono tiny">—</footer>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="vendor/uPlot.iife.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

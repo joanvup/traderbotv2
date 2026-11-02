@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "goldbot"
+version = "0.1.0"
+description = "Bot XAUUSD para MT5 demo con núcleo de decisión adaptativo y dashboard local"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "Joan" }]
+dependencies = [
+    "MetaTrader5>=5.0.45",
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "hmmlearn>=0.3.2",
+    "pydantic>=2.6",
+    "PyYAML>=6.0.1",
+    "python-dotenv>=1.0",
+    "tzdata>=2024.1",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    "types-PyYAML",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+goldbot = ["py.typed", "infra/sql/*.sql", "dashboard/static/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true

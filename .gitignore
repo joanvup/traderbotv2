@@ -1,0 +1,32 @@
+# Entornos y cachés
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secretos
+.env
+!.env.example
+
+# Datos y artefactos locales
+logs/
+data/
+reports/
+*.db
+*.db-wal
+*.db-shm
+*.parquet
+*.joblib
+
+# MQL5: binarios y logs de MetaEditor
+mt5/*.ex5
+mt5/*.log
+
+# Sistema
+Thumbs.db
+desktop.ini

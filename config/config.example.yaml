@@ -1,0 +1,182 @@
+# Configuración de ejemplo de goldbot (Fase 0).
+# Ningún umbral debe quedar hardcodeado en el código: todo se lee de aquí.
+
+app:
+  name: goldbot
+  # Pepperstone: hora del servidor = America/New_York + 7 h.
+  # (GMT+3 con el horario de verano de EE. UU., GMT+2 sin él.) Todo se persiste en UTC.
+  server_timezone: America/New_York
+  server_shift_hours: 7.0
+  magic: 20261030
+  db_path: data/state.db
+  data_dir: data
+  log_dir: logs
+
+mt5:
+  # null = localizar el terminal automáticamente; si hay varias rutas, indícala.
+  terminal_path: null
+  symbol: XAUUSD
+  # Override exacto si el broker usa sufijo (p. ej. XAUUSD.a). null = resolver por symbols_get.
+  symbol_override: null
+  timeout_ms: 60000
+  use_terminal_session: true
+
+risk:
+  risk_pct: 1.0
+  daily_loss_pct: 2.0
+  max_trades_day: 2
+  equity_floor_usd: 800.0
+
+sessions:
+  # Ventanas en hora del servidor, formato HH:MM-HH:MM.
+  # Apertura dominical del oro: ~00:00 hora del servidor (22:00 UTC con GMT+2,
+  # 01:00 con GMT+3). Se abre desde el arranque de la semana, pero dejando fuera
+  # el buffer de rollover (23:45-00:15) y el hueco de cierre de viernes.
+  entries:
+    - "00:15-20:00"
+  avoid_rollover: true
+  # Sesiones de liquidez (hora de servidor GMT+3/GMT+2). Nueva York tiene
+  # prioridad en el solape Londres/NY; fuera de ventanas la sesión es CLOSED.
+  asia: ["03:00-11:00"]
+  london: ["11:00-19:00"]
+  new_york: ["16:00-00:00"]
+
+data:
+  decision_timeframe: M5
+  entry_timeframes: [M5, M15]
+  context_timeframes: [M15, H1, H4, D1]
+  warmup_bars:
+    M5: 600
+    M15: 400
+    H1: 600
+    H4: 400
+    D1: 300
+  max_feed_age_s: 120
+  stale_after_s:
+    M5: 360
+    M15: 1000
+    H1: 4000
+    H4: 16000
+    D1: 90000
+
+regime:
+  method: both
+  confidence_min: 0.6
+  hysteresis_bars: 3
+  n_states: 4
+  train_window_bars: 5000
+  retrain_every_bars: 500
+  adx_period: 14
+  atr_period: 14
+  atr_percentile_window: 200
+  atr_high_percentile: 0.8
+  ema_fast: 20
+  ema_slow: 50
+  slope_lookback: 20
+  min_efficiency: 0.35
+  # Contexto multi-timeframe: estructura (swings/niveles) y timing.
+  swing_lookback: 3
+  level_tolerance_atr: 0.25
+  momentum_lookback: 5
+  structure_lookback_bars: 200
+  max_swings: 12
+  max_levels: 8
+  round_level_step: 10.0
+
+playbooks:
+  trend_pullback:
+    enabled: true
+    min_confidence: 0.6
+    params: { pullback_atr: 0.8, sl_atr: 1.5, rr: 2.0 }
+  breakout:
+    enabled: true
+    min_confidence: 0.6
+    params: { buffer_atr: 0.15, sl_atr: 1.2, rr: 2.0 }
+  range_fade:
+    enabled: true
+    min_confidence: 0.7
+    params: { edge_atr: 0.3, sl_atr: 1.0, rr: 1.5 }
+  no_trade:
+    enabled: true
+    min_confidence: 0.0
+    params: {}
+
+filters:
+  max_spread_multiplier: 2.5
+  spread_lookback_bars: 100
+  news_window_before_min: 30
+  news_window_after_min: 30
+  # El calendario de Pepperstone no publica "high": su máximo es "moderate".
+  news_min_impact: moderate
+  news_currencies: [USD]
+  # Códigos de evento que bloquean aunque su impacto sea menor (p. ej. FOMC).
+  news_critical_event_codes: []
+  # El calendario nativo se exporta con mt5/GoldbotCalendarExport.mq5 a
+  # Common\Files\goldbot\calendar_events.csv. null = ruta por defecto.
+  calendar_bridge_path: null
+  # Antigüedad máxima del CSV antes de considerarlo atrasado.
+  calendar_max_age_s: 180
+  # block = no operar si el CSV no existe, está atrasado o viene vacío.
+  calendar_unavailable_policy: block
+  # Minutos bloqueados alrededor del cambio de día del servidor (rollover).
+  rollover_buffer_min: 15
+
+execution:
+  deviation_points: 20
+  filling_policy: auto
+  max_retries: 2
+  retry_backoff_s: 1.0
+
+management:
+  breakeven_at_r: 1.0
+  partial_at_r: 1.5
+  partial_close_pct: 0.5
+  trailing_atr_mult: 1.5
+  time_stop_bars: 48
+  regime_exit_confidence: 0.7
+  atr_sl_mult: 1.5
+
+dashboard:
+  # Solo loopback: nunca 0.0.0.0.
+  host: 127.0.0.1
+  port: 8787
+  token_env: DASHBOARD_TOKEN
+  stale_after_s: 15
+  refresh_s: 3
+  close_all_enabled: true
+  # Un "cerrar todo" que el bot no llega a leer caduca: cerrar posiciones horas después
+  # de que el operador lo pidió no es lo que el operador pidió.
+  close_all_ttl_s: 120
+
+backtest:
+  initial_balance: 1000.0
+  commission_per_lot_side_usd: 3.5
+  slippage_points: 2
+  train_window_days: 180
+  test_window_days: 30
+  step_days: 30
+  # Una celda régimen × playbook con menos operaciones que esto se marca "no concluyente".
+  min_cell_trades: 10
+
+storage:
+  retention_days: 90
+  log_lines_retention: 2000
+
+safety:
+  # Doble candado: cambiar a true requiere también aprobación explícita del operador.
+  allow_live: false
+  require_demo: true
+  max_consecutive_execution_errors: 3
+  # Segundos que puede pasar el marco de decisión en MISSING antes de latchear el kill
+  # switch. Un STALE por mercado cerrado no latchea: solo el MISSING (sin velas) lo hace.
+  missing_grace_s: 600.0
+  # Margen libre mínimo, en % del equity, antes de latchear (MARGIN_CRITICAL). Con 0.0 se
+  # desactiva. En XAUUSD el margen es ~1,2 % del equity por 0,01 lote a 1:200, así que este
+  # candado solo se dispara si el tamaño de posición se va de madre.
+  min_free_margin_pct: 30.0
+  # Lecturas de salud sin enlace antes de latchear TERMINAL_DISCONNECTED. El ciclo de salud
+  # corre en cada poll (poll_interval_s), así que 3 son ~15 s de terminal caído: lo justo para
+  # aguantar un `terminal_info()` que falla un instante (terminal reiniciándose u ocupado
+  # durante un order_send) sin bloquear el día y exigir reset manual. Durante la caída el bot
+  # ya no opera por otra vía: las lecturas del ciclo fallan y entra en backoff.
+  disconnect_tolerance_polls: 3

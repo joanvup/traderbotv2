@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>goldbot - Dashboard de Monitoreo</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <span>goldbot</span>
+                <span>XAUUSD</span>
+            </div>
+            <div class="status-indicator" id="statusIndicator">
+                <span class="dot dot-offline"></span>
+                <span class="status-text">DESCONECTADO</span>
+            </div>
+            <div class="controls">
+                <button id="pauseBtn" class="btn-pause">Pausar</button>
+                <button id="closeAllBtn" class="btn-close-all">Cerrar Todo</button>
+            </div>
+        </header>
+
+        <div class="panels">
+            <!-- KPI Cards -->
+            <section class="panel kpi-panel">
+                <h2>KPIs Principales</h2>
+                <div class="kpi-grid">
+                    <div class="kpi-card" id="kpiBalance">
+                        <div class="kpi-label">Balance</div>
+                        <div class="kpi-value" id="balanceValue">$0.00</div>
+                        <div class="kpi-change" id="balanceChange">+0.00%</div>
+                    </div>
+                    <div class="kpi-card" id="kpiEquity">
+                        <div class="kpi-label">Equity</div>
+                        <div class="kpi-value" id="equityValue">$0.00</div>
+                        <div class="kpi-change" id="equityChange">+0.00%</div>
+                    </div>
+                    <div class="kpi-card" id="kpiPNL">
+                        <div class="kpi-label">PnL Diario</div>
+                        <div class="kpi-value" id="pnlValue">$0.00</div>
+                        <div class="kpi-change" id="pnlChange">+0.00%</div>
+                    </div>
+                    <div class="kpi-card" id="kpiTrades">
+                        <div class="kpi-label">Operaciones Hoy</div>
+                        <div class="kpi-value" id="tradesValue">0</div>
+                        <div class="kpi-change" id="tradesChange">+0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Panel "Cerebro" -->
+            <section class="panel brain-panel">
+                <h2>Cerebro</h2>
+                <div class="regime-section">
+                    <div class="regime-title">Régimen Actual</div>
+                    <div class="regime-label" id="regimeLabel">--</div>
+                    <div class="regime-confidence" id="regimeConfidence">--</div>
+                </div>
+                <div class="probabilities-section">
+                    <div class="probabilities-title">Probabilidades</div>
+                    <div class="probabilities-grid">
+                        <div class="probability-item regime-up" id="probUp">--</div>
+                        <div class="probability-item regime-down" id="probDown">--</div>
+                        <div class="probability-item range" id="probRange">--</div>
+                        <div class="probability-item high-vol" id="probHigh">--</div>
+                        <div class="probability-item unknown" id="probUnknown">--</div>
+                    </div>
+                </div>
+                <div class="selected-playbook" id="selectedPlaybook">
+                    <div>Playbook: --</div>
+                    <div>Rationale: --</div>
+                </div>
+            </section>
+
+            <!-- Fila de chips -->
+            <section class="panel chips-panel">
+                <h2>Chips de Estado</h2>
+                <div class="chips-grid">
+                    <div class="chip" id="chipSpread">Spread: --</div>
+                    <div class="chip" id="chipATR">ATR: --</div>
+                    <div class="chip" id="chipSession">Sesión: --</div>
+                    <div class="chip" id="chipTradesON">Trades ON</div>
+                    <div class="chip" id="chipPositions">Posiciones: 0</div>
+                </div>
+            </section>
+
+            <!-- Historial de decisiones -->
+            <section class="panel history-panel">
+                <h2>Historial de Decisiones (últimas 10)</h2>
+                <div class="history-list" id="historyList">
+                    <!-- Items generados dinámicamente -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Posiciones abiertas -->
+        <section class="panel positions-panel" id="positionsPanel" style="display: none;">
+            <h2>Posiciones Abiertas</h2>
+            <div class="positions-list" id="positionsList">
+                <!-- Items generados dinámicamente -->
+            </div>
+        </section>
+
+        <!-- Feed de eventos -->
+        <section class="panel events-panel">
+            <h2>Feed de Eventos (últimos 60)</h2>
+            <div class="events-list" id="eventsList">
+                <!-- Items generados dinámicamente -->
+            </div>
+        </section>
+
+        <!-- Log del bot -->
+        <section class="panel log-panel">
+            <h2>Log del Bot (últimas 160 líneas)</h2>
+            <div class="log-container" id="logContainer">
+                <pre id="logText">Iniciando dashboard...</pre>
+            </div>
+            <button class="btn-pause" id="pauseLog">Pausar Scroll</button>
+        </section>
+
+        <footer>
+            <div class="footer-info">
+                <span>Magic: <span id="magicValue">--</span></span>
+                <span>Modo: <span id="modeValue">--</span></span>
+                <span>Cuenta: <span id="accountValue">--</span></span>
+            </div>
+            <div class="footer-updated" id="lastUpdated">--</div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
