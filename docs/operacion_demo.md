@@ -340,12 +340,17 @@ alimenta la decisión del bot, no el broker).
 - ~~break-even, parcial y trailing sobre una posición viva~~ → ejercitados el 2026-11-02 sobre
   operaciones reales de demo (§9; diseño §12.11), y ahí salieron los dos defectos que solo se ven
   con órdenes vivas: el divisor de R re-derivado del SL y el TP que `TRADE_ACTION_SLTP` borraba.
-- **El R que pinta `trades` está inflado en las operaciones con parcial cerrado**: el neto de todos
-  los deals se divide por el riesgo del volumen que queda al final, no por el riesgo inicial (en
-  demo, una posición de 0,05 con parcial de 0,02 salió como 2,69 R cuando lo honesto era 1,61). El
-  neto en USD sí es correcto, así que el PnL y el candado del −2 % no se ven afectados; lo que se
-  lee mal es la distribución de R de la revisión semanal, y solo en las operaciones que llegaron a
-  parcial. Arreglo pendiente (pide columna nueva en `positions`, ver diseño §12.11).
+- ~~**El R que pinta `trades` está inflado en las operaciones con parcial cerrado**: el neto de todos
+  los deals se divide por el riesgo del volumen que queda al final, no por el riesgo inicial~~ →
+  arreglado el 2026-11-02 sin tocar el esquema: el divisor usa ahora el volumen del deal `IN`, que
+  el histórico del broker sí conserva, y `trades.volume` pasa a ser el lote de entrada en vez del
+  restante. El neto en USD ya era correcto, así que el PnL y el candado del −2 % nunca se vieron
+  afectados; lo que estaba inflado era la distribución de R del panel y de la revisión semanal, y
+  solo en las operaciones que llegaron a parcial. **Las dos filas escritas antes del arreglo se
+  quedan como están** (diseño §12.11): 414168566 aparece con 2,69 R cuando eran 1,61, y 414064025
+  arrastra además el divisor re-derivado del SL, así que su R honesto ya no es recuperable. El
+  proceso que está vivo ahora mismo carga el código anterior en memoria: hay que reiniciar el bot
+  para que la próxima conciliación use el divisor nuevo.
 - **Nadie ha visto un TP llenándose en el broker**, ni un SL saltando mientras el bot estaba caído,
   ni el kill switch latcheándose en vivo, ni el cierre por régimen en contra: son las ramas
   que faltan y solo las da una semana de operación continua.

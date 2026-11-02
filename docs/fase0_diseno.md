@@ -755,7 +755,7 @@ se rechaza con **`10025 NO_CHANGES`** (`filled = False`). Ya estaba clasificado 
 arreglo pasé el SL sin cambiarlo: la petición ni llegó al mercado y el "TP conservado" no probaba
 nada. Hubo que pedir un cambio real.
 
-**Cierre de la pata y un tercer hallazgo (documentado, NO arreglado).** La 414168566 murió en el
+**Cierre de la pata y un tercer hallazgo (documentado, NO arreglado en esa entrega).** La 414168566 murió en el
 broker a las 05:06:00 por su SL arrastrado, en **3904,34** — el nivel que dejé puesto al verificar
 el arreglo (bajé 0,01 el SL y no lo devolví); el TP 3896,34 nunca se llenó. Se concilió en el cierre
 M5 de las 05:10: +13,78 USD, `exit_reason SL`, `r_multiple` **2,69**. El neto cuadra (los 0,02 del
@@ -767,11 +767,47 @@ que el defecto 1 (un R inflado que se va al ledger y a la revisión semanal), pe
 distinto: **el denominador del R de una operación cerrada debe ser el riesgo inicial en dólares,
 no el que queda después de los parciales.**
 
-No lo arreglo en esta entrega porque el arreglo correcto es guardar el volumen (o el `risk_money`
-en USD) de la entrada en `positions` al abrir, y eso es una **migración de esquema** con una base
-demo ya escrita encima — no es un cambio de una línea, y merecía decirlo antes de tocarlo. El
-efecto en los datos que hay ahora: solo las operaciones con parcial cerrado salen infladas, y en
-esta base es un caso (414064025: 19,73 con divisor roto; 414168566: 2,69 en lugar de 1,61).
+**Cómo se arregló (entrega posterior del mismo día), y por qué sin migración.** La primera idea era congelar en `positions` el volumen
+(o el `risk_money` en USD) de la entrada, pero eso pedía un `ALTER TABLE` sobre una base demo ya
+escrita. No hizo falta: el reconciliador **ya tiene en la mano la lista de deals** con la que saca
+el neto y el `entry_deal_id`, y el deal `IN` lleva el volumen con el que se abrió la posición
+(`mt5_adapter` lo rellena de `deal.volume`; en el simulador sale de `request.volume`). El divisor
+pasa a ser `initial_risk_price × contract_size × Σ volume de los deals IN`, y esa misma cifra es la
+que se escribe en `trades.volume`, que hasta ahora guardaba el restante. Está en
+`_reconcile_closed()` y en la firma nueva de `_r_from_net()`.
+
+Leído contra el histórico real del broker (solo lectura, por el propio `Mt5BrokerAdapter`): la
+414168566 da `IN 0,05` + `OUT 0,02` + `OUT 0,03` y la 414064025 `IN 0,02` + `OUT 0,01` + `OUT 0,01`.
+El `IN` es siempre el lote con el que se entró, y la suma de `OUT` reproduce el de entrada, así que
+el divisor nuevo sale de un dato que el terminal sí conserva y no de una suposición.
+
+La ventana de deals (`now-3d`) sólo se perdería el `IN` si la operación hubiera vivido más de tres
+días. No hay ningún candado del código que lo impida del todo —el `time_stop` (48 velas M5) sólo
+cierra lo que NO llegó al breakeven, y el bot no fuerza salida antes del fin de semana—, pero en la
+demo las cuatro patas cerraron en minutos u horas. Si algún día ocurriera, el respaldo es el
+comportamiento viejo (`stored.volume`) y se ve en la propia fila: `trades.volume` volvería a ser el
+restante, no el de entrada. Es un fallo ruidoso, no silencioso. Regresión:
+`tests/integration/test_fase4_bot.py::test_el_r_reconciliada_se_divide_por_el_volumen_con_el_que_se_abrio`
+(abre 0,02, parcial del 50 %, muere por el SL arrastrado; con el divisor viejo el R de esa cerrada
+sale 1,79 en lugar de 0,90 — exactamente el doble).
+
+El histórico no se retoca, igual que el defecto 1: las dos filas infladas se quedan como están.
+Ojo al leerlas, porque no están infladas por la misma razón — 414168566 (2,69 cuando era 1,61) sólo
+lleva el defecto del volumen, y su riesgo inicial sí estaba congelado; **414064025 (19,73) arrastra
+los dos**, el divisor re-derivado del trailing y el volumen restante, así que su R honesto no es
+recuperable desde la fila, y tampoco desde el log: los payloads de aquellos `REVIEW` no guardaban el
+SL de entrada (sólo el del movimiento: 3912,60000, 3912,13, 3903,55). Decir "9,86 R" para esa
+posición —que es lo que da anular sólo el volumen, 14,40/(0,73×100×0,02)— sería corregir la mitad y
+quedaría sonando a cifra buena.
+
+Efecto en lo que hay ahora: sólo las operaciones con parcial cerrado salen infladas, y en esta base
+son dos casos de ocho cerrados (y las dos son ganadoras, que es justo la cola que interesa). El
+sesgo afecta a `expectancy_r` del panel, al histograma de R y al desglose por régimen y playbook de
+la revisión semanal — todos leen `trades.r_multiple`, y la semanal reusa las métricas del backtest
+sobre esas filas. El backtest y el walk-forward **no** están tocados: el motor de backtest no tiene
+gestión (sin parciales, `engine.py` no mueve el volumen) y su `risk_money` se congela al abrir.
+Suite tras este arreglo: **298 tests verdes**, `ruff check .` limpio, `mypy src/goldbot scripts` sin
+errores en 76 ficheros.
 
 **Lo que sigue sin probarse**, dicho con honestidad: sigue sin haber una `ENTRY` disparada por un
 playbook (todas las operaciones de este § las fabricó el script); no se ha visto un **TP llenándose

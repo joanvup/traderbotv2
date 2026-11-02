@@ -592,6 +592,12 @@ class Bot:
                 # puede ser latencia. Se deja registrada para reintentar el ciclo próximo.
                 continue
             net = sum(d.profit + d.commission + d.swap + d.fee for d in deals)
+            # El neto incluye TODOS los deals, así que el divisor tiene que ser el riesgo de la
+            # posición ENTERA. `stored.volume` es el que queda después de los parciales: con uno
+            # del 50 % ese divisor es la mitad del real y el R sale el doble, y el sesgo cae justo
+            # sobre las ganadoras, que son las únicas que llevan parcial. El volumen de apertura
+            # está en el deal IN, que es lo que el histórico del broker sí conserva.
+            volumen_apertura = sum(d.volume for d in deals if d.entry == "in") or stored.volume
             reason, source = _exit_from_deals(outs)
             self._daily.record_pnl(trading_day, net)
             self._store.write_trade(
@@ -599,7 +605,7 @@ class Bot:
                     position_id=ticket,
                     symbol=self._spec.resolved_name,
                     side=stored.side,
-                    volume=stored.volume,
+                    volume=volumen_apertura,
                     entry_price=stored.entry_price,
                     exit_price=outs[-1].price,
                     sl=stored.sl,
@@ -611,7 +617,7 @@ class Bot:
                     commission=sum(d.commission for d in deals),
                     swap=sum(d.swap for d in deals),
                     net_profit=net,
-                    r_multiple=_r_from_net(stored, net, self._spec),
+                    r_multiple=_r_from_net(stored, net, self._spec, volumen_apertura),
                     duration_s=max(0, int((outs[-1].time_utc - stored.opened_at_utc).total_seconds())),
                     exit_reason=reason,
                     exit_reason_source=source,
@@ -1010,11 +1016,22 @@ def _r_desde(pos: PositionState, inicial: float) -> float:
     return (pos.current_price - pos.entry_price) * direction / inicial
 
 
-def _r_from_net(stored: StoredPosition, net: float, spec: SymbolSpec) -> float | None:
-    """R múltiplo final: PnL neto (comisiones incluidas) entre el riesgo inicial en USD."""
-    if stored.initial_risk_price <= 0.0 or stored.volume <= 0.0:
+def _r_from_net(
+    stored: StoredPosition,
+    net: float,
+    spec: SymbolSpec,
+    opened_volume: float,
+) -> float | None:
+    """R múltiplo final: PnL neto (comisiones incluidas) entre el riesgo inicial en USD.
+
+    `opened_volume` es el volumen CON EL QUE SE ABRIÓ la operación, no el que queda al cerrar:
+    el neto es la suma de todos los deals, parciales incluidos, y el riesgo inicial se fijó sobre
+    el lote entero. Acompaña a `_riesgo_inicial` —ninguno de los dos es re-derivable del estado
+    vivo de la posición.
+    """
+    if stored.initial_risk_price <= 0.0 or opened_volume <= 0.0:
         return None
-    risk_money = stored.initial_risk_price * spec.contract_size * stored.volume
+    risk_money = stored.initial_risk_price * spec.contract_size * opened_volume
     if risk_money <= 0.0:
         return None
     return net / risk_money

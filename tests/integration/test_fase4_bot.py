@@ -604,6 +604,42 @@ def test_sl_del_servidor_se_reconcilia_en_trades_y_daily_stats(tmp_path: Path) -
     assert rig.store.read_open_positions() == {}
 
 
+def test_el_r_reconciliada_se_divide_por_el_volumen_con_el_que_se_abrio(tmp_path: Path) -> None:
+    """Un parcial deja `positions.volume` a la mitad, pero el neto es el de la operación entera.
+
+    El riesgo inicial se congeló sobre el lote de ENTRADA (4,12 × 100 × 0,02 = 8,24 USD). Si el
+    divisor usa el volumen que queda tras el parcial (0,01 → 4,12 USD) el R sale exactamente el
+    doble, y el sesgo cae justo sobre las ganadoras: son las únicas que llevan parcial. En la
+    demo ocurrió — +13,78 USD abiertos con 0,05 y cerrados con 0,03 restantes se escribieron
+    como 2,69 R cuando eran 1,61 R.
+    """
+    rig = _rig(tmp_path)
+    rig.bot.run_cycle(rig.analysis)
+    ticket = rig.sim.positions(MAGIC)[0].ticket
+
+    rig.sim.advance(_bar(2_406.0, 2_405.0, 2_406.5))  # r = 1,40 → breakeven
+    rig.bot.run_cycle(rig.analysis)
+    rig.sim.advance(_bar(2_407.0, 2_406.5, 2_407.5))  # r = 1,65 → parcial del 50 %
+    rig.bot.run_cycle(rig.analysis)
+    assert rig.sim.positions(MAGIC)[0].volume == pytest.approx(0.01)
+    assert rig.store.read_open_positions()[ticket].volume == pytest.approx(0.01)
+
+    rig.sim.advance(_bar(2_400.0, 2_399.0, 2_401.5))  # el SL arrastrado (2401,00) salta
+    rig.bot.run_cycle(rig.analysis)
+
+    cierre = _rows(rig.db_path, "SELECT * FROM trades")[0]
+    # +6,76 brutos del parcial (a 2406,98), +0,76 del SL (a 2400,98) y −0,14 de las tres
+    # comisiones (0,07 del IN y 0,035 por cada una de las dos salidas).
+    assert cierre["net_profit"] == pytest.approx(7.38, abs=1e-6)
+    assert cierre["commission"] == pytest.approx(-0.14, abs=1e-6)
+    assert cierre["exit_reason"] == "SL"
+    # `trades.volume` es el lote con el que se ENTRÓ, no el que quedaba al cerrar.
+    assert cierre["volume"] == pytest.approx(0.02)
+    assert cierre["r_multiple"] == pytest.approx(7.38 / 8.24, abs=1e-6)
+    # Con el volumen restante el divisor habría sido 4,12 USD y esta cerrada saldría 1,79 R.
+    assert cierre["r_multiple"] < 1.0
+
+
 def test_el_equity_de_cierre_del_dia_se_escribe_en_cada_ciclo(tmp_path: Path) -> None:
     """`daily_stats.equity_end` no queda NULL: es la foto del ciclo, no la del arranque.
 
