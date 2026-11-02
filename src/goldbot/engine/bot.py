@@ -227,11 +227,12 @@ class Bot:
 
         # 2) El día operativo necesita su fila con el equity de arranque para que el
         #    filtro de pérdida diaria tenga referencia (ensure_day no pisa la existente).
-        #    El cierre se reescribe en cada ciclo: cuando el día deja de ser hoy, la última
-        #    escritura queda congelada y ese es exactamente su equity de cierre. Sin esta
-        #    línea `daily_stats.equity_end` es NULL para siempre, el dashboard pinta el día
-        #    sin cierre y el auditor EQUITY_FLOOR descarta la fila por pedir `equity_end`
-        #    no nulo: el suelo de equity nunca se contrastaba día a día.
+        #    El cierre se reescribe en cada ciclo, y un ciclo solo corre con vela nueva del
+        #    marco de decisión: lo que queda congelado al cambiar el día es el equity del
+        #    último ciclo del día, no el de la medianoche. Sin esta línea
+        #    `daily_stats.equity_end` es NULL para siempre, el dashboard pinta el día sin
+        #    cierre y el auditor EQUITY_FLOOR descarta la fila por pedir `equity_end` no
+        #    nulo: el suelo de equity nunca se contrastaba día a día.
         self._daily.ensure_day(trading_day, account.equity)
         self._daily.record_equity_end(trading_day, account.equity)
 
