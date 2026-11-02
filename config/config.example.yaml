@@ -1,5 +1,16 @@
-# Configuración de ejemplo de goldbot (Fase 0).
-# Ningún umbral debe quedar hardcodeado en el código: todo se lee de aquí.
+# Configuración de ejemplo de goldbot (Fase 0). Es la config viva: se pasa con --config
+# (no existe config/config.yaml).
+#
+# Cada clave tiene su default en el modelo `AppConfig` (src/goldbot/config.py) y este YAML es la
+# capa por encima: `load_config` hace `AppConfig.model_validate(raw)`, así que lo que aquí no se
+# escribe se lee del modelo. Medido el 2026-11-02 aplastando las dos vistas: 118 hojas y UNA sola
+# divergencia declarada — `sessions.entries` a "00:15-20:00" frente al default "07:00-20:00", la
+# apertura dominical del oro (#59). `tests/unit/test_config.py` (la prueba
+# `test_el_yaml_de_produccion_no_diverge_de_los_defaults_sin_declarse`) falla si aparece una
+# segunda, así que mover un umbral en un solo de los dos sitios se nombra solo en vez de llegar
+# al runtime sin que nadie lo decida.
+# Lo que el spec prohíbe es otra cosa, y se sigue cumpliendo: ningún umbral existe SOLO en la
+# lógica de trading — todos viven en el modelo, y desde ahí son pisables por este fichero.
 
 app:
   name: goldbot
