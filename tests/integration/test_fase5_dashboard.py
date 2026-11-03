@@ -995,6 +995,42 @@ def test_api_de_lectura_no_exige_token(seeded: tuple[Path, _FrozenClock, TestCli
         assert f'"{recurso}"' in html, recurso
 
 
+def test_el_content_type_de_los_estaticos_no_depende_del_registro(tmp_path: Path) -> None:
+    """Un `HKCR\\.js` con `Content Type = text/plain` dejaba el panel vacío y sin avisar.
+
+    Ocurrido el 2026-11-03 en una segunda máquina: `mimetypes` sobrepone el valor del registro a
+    su tabla base, Starlette sirve `app.js` como `text/plain`, y como el panel manda
+    `X-Content-Type-Options: nosniff` el navegador se niega a ejecutarlo. El resultado es la
+    página con los estilos aplicados y todos los bloques vacíos — `boot()` nunca corre y no se
+    pide ningún dato — sin ningún error visible.
+    """
+    import mimetypes
+
+    extensiones = (".js", ".css")
+    originales = {ext: mimetypes.guess_type(f"recurso{ext}")[0] for ext in extensiones}
+    # Envenar como lo haría el registro: `read_windows_registry` llama a `add_type(ctype, ext)`.
+    for ext in extensiones:
+        mimetypes.add_type("text/plain", ext)
+    try:
+        assert mimetypes.guess_type("app.js")[0] == "text/plain"
+        client = _client(tmp_path / "state.db", _FrozenClock())
+        for recurso in ("app.js", "vendor/uPlot.iife.min.js"):
+            res = client.get(f"/{recurso}")
+            assert res.status_code == 200, recurso
+            assert res.headers["content-type"] == "text/javascript; charset=utf-8", recurso
+        for recurso in ("styles.css", "vendor/uPlot.min.css"):
+            res = client.get(f"/{recurso}")
+            assert res.status_code == 200, recurso
+            assert res.headers["content-type"] == "text/css; charset=utf-8", recurso
+        # La cabecera que provoca el bloqueo sigue puesta: lo que se corrige es el tipo, no la
+        # política de seguridad.
+        assert client.get("/app.js").headers["x-content-type-options"] == "nosniff"
+    finally:
+        for ext, tipo in originales.items():
+            if tipo is not None:
+                mimetypes.add_type(tipo, ext)
+
+
 # ---------------------------------------------------------------------------
 # Que la Pausa haga de verdad lo que promete el botón
 # ---------------------------------------------------------------------------

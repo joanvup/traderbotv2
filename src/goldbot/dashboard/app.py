@@ -8,6 +8,7 @@ funciona sin internet.
 
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +87,17 @@ def create_app(
     def _unhandled(request: Request, exc: Exception) -> JSONResponse:  # noqa: ARG001
         """Un fallo leyendo nunca derriba el panel: devuelve 500 con el detalle mínimo."""
         return JSONResponse(status_code=500, content={"detail": f"error interno: {exc}"})
+
+    # `mimetypes` lee el registro de Windows al iniciarse (`read_windows_registry`) y cada
+    # `HKCR\<ext>` con valor `Content Type` se sobrepone a la tabla base de Python. En una máquina
+    # con `HKCR\.js = text/plain` esto hacía que los scripts salieran como texto plano y el
+    # navegador los rechazara en silencio por el `nosniff` del middleware de arriba: página con
+    # estilos y vacía de datos, sin ningún aviso. El panel no puede depender de lo que diga el
+    # registro de la máquina, así que el tipo se fija aquí. Sin `init()`: llamarla reconstruye la
+    # tabla y vuelve a leer el registro, deshaciendo este `add_type` — y `add_type` ya inicializa
+    # perezosamente si la tabla todavía no existe.
+    mimetypes.add_type("text/javascript", ".js")
+    mimetypes.add_type("text/css", ".css")
 
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
     return app
