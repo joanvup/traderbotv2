@@ -925,6 +925,38 @@ def test_el_panel_tiene_boton_de_rearme_y_lo_oculta_sin_candado() -> None:
     assert js.index('ui.armedResetKill + 5000 < Date.now()') < js.index('sendCommand("reset_kill_switch")')
 
 
+def test_el_panel_avis_cuando_el_guion_no_arranca_o_falta_uPlot() -> None:
+    """El panel de una máquina con el registro roto se quedó vacío y sin decir nada.
+
+    Se ata sobre el fuente, sin navegador: en esta suite no hay runner de JS. Lo que se fija es el
+    contrato de los dos silencios que hubo que romper — que exista un aviso sin ejecutar nada y que
+    la falta de uPlot no arrastre al resto de la página.
+    """
+    here = Path(__file__).resolve()
+    static = here.parents[2] / "src" / "goldbot" / "dashboard" / "static"
+    html = (static / "index.html").read_text(encoding="utf-8")
+    js = (static / "app.js").read_text(encoding="utf-8")
+
+    # 1 · El centinela se pinta desde el HTML — sin `hidden`, a diferencia del banner condicional —
+    #     y lo quita la primera sentencia que ejecuta el guion. Si el guion no corre, no hay nada
+    #     que lo oculte: es el único aviso posible cuando el navegador rechaza `app.js`.
+    assert 'id="banner-no-js" class="banner banner-danger">' in html
+    assert 'id="banner-live" class="banner banner-danger hidden"' in html
+    arranque_guion = js[js.index('"use strict";') : js.index("const ui = {")]
+    assert 'getElementById("banner-no-js")' in arranque_guion
+
+    # 2 · Sin uPlot el bloque de gráficos se degrada con aviso y `boot()` llega a pedir datos.
+    assert "function hayUPlot(notaId)" in js
+    for funcion, nota in (("buildEquityChart", "equity-note"), ("buildDailyChart", "daily-note")):
+        cuerpo = js[js.index(f"function {funcion}()") :]
+        cuerpo = cuerpo[: cuerpo.index("\n}")]
+        assert f'hayUPlot("{nota}")' in cuerpo, funcion
+        assert cuerpo.index("hayUPlot(") < cuerpo.index("new uPlot("), funcion
+        assert f'id="{nota}"' in html, nota
+    boot = js[js.index("function boot()") :]
+    assert boot.index("buildDailyChart()") < boot.index("startLoop()")
+
+
 def test_close_all_caduca_y_los_comandos_prohibidos_no_existen(
     seeded: tuple[Path, _FrozenClock, TestClient]
 ) -> None:

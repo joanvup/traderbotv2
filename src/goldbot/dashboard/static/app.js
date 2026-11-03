@@ -11,6 +11,12 @@
 
 "use strict";
 
+/* Centinela: si este fichero se está ejecutando, el navegador pudo cargarlo y el aviso del HTML
+   sobra. Cualquier fallo anterior —guion bloqueado por el `Content-Type` que dicte el registro de
+   la máquina, 404 del recurso, navegador sin soporte para el lenguaje— deja el banner puesto, y
+   no hay forma de quitarlo desde fuera del JS. Por eso es la primera sentencia del fichero. */
+document.getElementById("banner-no-js")?.classList.add("hidden");
+
 const ui = {
   offsetMin: 0,
   refreshMs: 3000,
@@ -575,8 +581,19 @@ function nearestIndex(xs, tsIso) {
   return lo;
 }
 
+/* Sin uPlot no hay gráficos, pero el panel sigue vivo: si el vendor no llegó o el navegador lo
+   rechazó, se avisa en la nota del propio bloque y `boot()` llega hasta `startLoop()`. Las dos
+   funciones de pintado ya se salen si el gráfico es `null`, así que KPIs, chips, cerebro y
+   operaciones siguen alimentándose de la API en vez de quedarse en blanco por un script ausente. */
+function hayUPlot(notaId) {
+  if (typeof uPlot !== "undefined") return true;
+  text(notaId, "gráficos no disponibles: no se ejecutó vendor/uPlot.iife.min.js");
+  return false;
+}
+
 function buildEquityChart() {
   const el = document.getElementById("chart-equity");
+  if (!hayUPlot("equity-note")) return;
   ui.charts.equity = new uPlot(
     {
       width: el.clientWidth || 640,
@@ -629,6 +646,7 @@ function renderEquity(data) {
 
 function buildDailyChart() {
   const el = document.getElementById("chart-daily");
+  if (!hayUPlot("daily-note")) return;
   ui.charts.daily = new uPlot(
     {
       width: el.clientWidth || 640,

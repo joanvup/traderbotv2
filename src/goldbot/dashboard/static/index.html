@@ -8,8 +8,17 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Banner rojo: sólo visible si la cuenta publicada NO es demo. Es lo primero que se pinta
-       porque el resto de la pantalla carece de sentido si se opera en real. -->
+  <!-- Centinela: se pinta desde el HTML y lo oculta la PRIMERA línea que ejecuta `app.js`. Es lo
+       único que puede avisar cuando el guion no corre (bloqueo por Content-Type, 404, navegador
+       sin soporte): la página queda con sus estilos y todos los bloques vacíos, y ni el banner de
+       cuenta no-demo ni el de degradación pueden aparecer, porque los revela el propio JS. -->
+  <div id="banner-no-js" class="banner banner-danger">
+    El guion del panel no se ha ejecutado: por eso no hay ningún dato. Mira el primer error en la
+    consola del navegador (F12) — lo habitual es que <code>app.js</code> llegue como
+    <code>text/plain</code> o que falte un recurso de <code>static/</code>.
+  </div>
+  <!-- Banner rojo: sólo visible si la cuenta publicada NO es demo. Es lo primero que se pinta en
+       cuanto el JS corre, porque el resto de la pantalla carece de sentido si se opera en real. -->
   <div id="banner-live" class="banner banner-danger hidden">
     CUENTA NO DEMO — el bot está diseñado para rechazar operar aquí. Detén el proceso y revisa
     <code>mt5.account</code>.
