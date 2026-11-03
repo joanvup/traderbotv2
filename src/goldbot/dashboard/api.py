@@ -227,6 +227,17 @@ def build_read_router(
         freshness = (context or {}).get("freshness") or {}
         risk_json = (latest or {}).get("risk_json") or {}
         last_equity_row = rm.equity_grid(24)
+        # La marca del panel de posiciones es la del ciclo que lo produce, no la de sus filas.
+        # `_reconcile_closed` borra la fila cuando el broker ya no la tiene, pero
+        # `positions.updated_at_utc` sólo se reescribe cuando la gestión actúa: una posición viva
+        # que no necesita acción la deja congelada horas. Medido en demo, con el enlace perfecto y
+        # el ciclo al día, el chip se pintaba en ámbar a los 60 y a los 82 s. La única escritura
+        # que ocurre en CADA `run_cycle` — actúe la gestión o no — es el estampo de `daily_stats`
+        # (`ensure_day` y `record_equity_end`, antes de la rama de posiciones), así que ésa es la
+        # edad real de la última reconciliación y se juzga con el paso de la vela de decisión.
+        ciclo_reconciliacion = max(
+            (str(row["updated_at_utc"]) for row in rm.daily_stats(2)), default=None
+        )
 
         # El feed sólo es "OK" si el bot sigue publicando: `feed_status` es lo último que
         # escribió, y un bot muerto hace 10 minutos dejó de escribirlo con el enlace vivo.
@@ -352,15 +363,15 @@ def build_read_router(
                 "equity_series": rm.stale_flag(
                     last_equity_row["last_ts_utc"], after_s=equity_after_s
                 ),
-                # Sin posiciones abiertas no hay ninguna fila que pueda estar atrasada: la lista
-                # vacía la garantiza el ciclo que concilia contra el broker, así que su frescura
-                # es la de `bot_state`. Juzgarla con `default=None` dejaba el chip ambarado de
-                # forma permanente justo cuando el bot está plano, que es el estado deseado.
-                "positions": rm.stale_flag(
-                    max((str(p["updated_at_utc"]) for p in positions), default=None)
-                    if positions
-                    else (state or {}).get("updated_at_utc")
-                ),
+                # Con la lista vacía no hay fila que pueda estar atrasada y con una viva la fila no
+                # avanza si la gestión no actúa: en los dos casos el bloque vale lo que vale el
+                # ciclo que lo reconcilia. Sin `daily_stats` (nadie ha corrido un `run_cycle`) no
+                # hay ciclo que medir, y el panel lo dice como dice un enlace caído.
+                # Con la lista vacía no hay fila que pueda estar atrasada y con una viva la fila no
+                # avanza si la gestión no actúa: en los dos casos el bloque vale lo que vale el
+                # ciclo que lo reconcilia. Sin `daily_stats` (nadie ha corrido un `run_cycle`) no
+                # hay ciclo que medir, y el panel lo dice como dice un enlace caído.
+                "positions": rm.stale_flag(ciclo_reconciliacion, after_s=decision_after_s),
             },
             "feed_freshness": freshness,
             # Parámetros que el navegador necesita para no adiviarlos: cadencia de refresco,

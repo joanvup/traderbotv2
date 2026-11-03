@@ -119,15 +119,19 @@ Detalles que importan:
   `bot_state` sigue avanzando no era el enlace, era que ese sondeo no escribía la fila; y el
   upsert es uno por minuto, no por poll, así que "hace 40 s" es sano y no un hueco.
 - **Cada chip, su cadencia** (§13.3 del diseño): un panel puede estar perfecto y salir en ámbar si se
-  mide con el reloj equivocado —fallo visto en vivo el 2026-11-02—. `dashboard.stale_after_s` (15 s) es
-  el reloj de lo que se escribe en cada poll (`bot_state`, `account`, `health`); `decision`, `context` y
-  la barra de PnL por día se juzgan con la cadencia del marco de decisión (`data.stale_after_s.M5` =
-  360 s) porque solo se reescriben con vela cerrada; y la curva de equity se juzga con
-  `dashboard.equity_stale_after_s` (120 s) porque su upsert es una foto por minuto. Con el bot plano el
-  chip de posiciones dice `sin posiciones · hace X` en verde: sin filas no hay dato que pueda estar
-  atrasado, y lo que se vigila es que el ciclo que concilia con el broker siga vivo (si ese se para, el
-  chip vuelve a ámbar). Lo que **sí** debe salir ámbar con el mercado cerrado —el corte diario del
-  broker, el fin de semana— son `decision`, `context` y `feed_status`: no hay vela nueva que cerrar.
+  mide con el reloj equivocado —fallo visto en vivo el 2026-11-02 y el 2026-11-03—. `dashboard.stale_after_s` (15 s) es
+  el reloj de lo que se escribe en cada poll (`bot_state`, `account`, `health`); `decision`, `context`,
+  la barra de PnL por día y el panel de posiciones se juzgan con la cadencia del marco de decisión
+  (`data.stale_after_s.M5` = 360 s) porque solo se reescriben con vela cerrada; y la curva de equity se
+  juzga con `dashboard.equity_stale_after_s` (120 s) porque su upsert es una foto por minuto. Las
+  posiciones van con la vela porque su marca no es la fila: `positions.updated_at_utc` solo avanza
+  cuando la gestión actúa, así que una operación viva que no necesita acción la deja congelada horas y
+  el chip se ambaraba a los 60 s con el bot perfecto. Lo que se vigila es el ciclo que concilia con el
+  broker —en eso la lista vacía y la viva son el mismo bloque—, y con el bot plano el chip dice
+  `sin posiciones · hace X` en verde. Lo que **sí** debe salir ámbar con el mercado cerrado —el corte
+  diario del broker, el fin de semana— son `decision`, `context`, `positions` y `feed_status`: no hay
+  vela nueva que cerrar. La antigüedad de la foto de cada operación sigue viéndose por fila
+  (`photo_age_s`) y es informativa: no es un fallo.
 - **Chip `entradas` en rojo**: la puerta de entradas la cierran exactamente dos cosas, el marco de
   decisión (M5) sin vela cerrada dentro de `data.stale_after_s.M5` (360 s) o un tick más viejo que
   `data.max_feed_age_s` (120 s). El bloque `feed_freshness` del panel lista también H1/H4/D1: esos son

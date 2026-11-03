@@ -103,6 +103,18 @@ def _rows(db_path: Path, query: str) -> list[sqlite3.Row]:
         return list(conn.execute(query))
 
 
+def _congelar_foto_de_posicion(db_path: Path, ticket: int, *, hace_s: int) -> None:
+    """Deja `positions.updated_at_utc` donde la deja un bot que no actúa sobre esa operación.
+
+    `upsert_position` estampa siempre el reloj de la máquina, así que por API no hay forma de
+    escribir una foto vieja; reproducir el caso real pasa por mover la columna.
+    """
+    marca = (NOW - timedelta(seconds=hace_s)).isoformat()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE positions SET updated_at_utc = ? WHERE ticket = ?", (marca, ticket))
+        conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Relleno de la base como lo haría el bot
 # ---------------------------------------------------------------------------
@@ -826,6 +838,35 @@ def test_sin_posiciones_abiertas_no_es_dato_atrasado(tmp_path: Path) -> None:
     ).read_text(encoding="utf-8")
     assert "sin posiciones · " in js
     assert 'flat ? "flat" : "ciclo"' in js
+
+
+def test_una_posicion_viva_sin_accion_no_es_dato_atrasado(
+    seeded: tuple[Path, _FrozenClock, TestClient]
+) -> None:
+    """La foto de la posición no avanza si la gestión no actúa; el bloque sí avanza con el ciclo.
+
+    Reproducido en demo el 2026-11-03: con una SELL viva cuyo stop sólo se movía en alguna vela,
+    el chip del panel de posiciones se pintaba en ámbar a los 60 y a los 82 s de la última acción,
+    porque se medía contra `positions.updated_at_utc` con el umbral del poll (15 s).
+    """
+    db_path, _, _ = seeded
+    _congelar_foto_de_posicion(db_path, 5_510_001, hace_s=35 * 60)
+
+    client = _client(db_path, _FrozenClock(NOW), _config())
+    body = client.get("/api/overview").json()
+
+    # La posición sigue ahí y su foto conserva la antigüedad real, por fila.
+    assert len(body["positions"]) == 1
+    assert body["positions"][0]["photo_age_s"] == pytest.approx(35 * 60, abs=1)
+
+    # Pero el bloque está al día: `_seed` estampa `daily_stats` con el reloj del último ciclo, y
+    # una vela de diferencia reconciliando contra el broker no es un dato atrasado.
+    assert body["staleness"]["positions"]["stale"] is False
+    assert body["staleness"]["positions"]["age_s"] == pytest.approx(0, abs=1)
+
+    # Con el ciclo muerto varios pasos de vela, ámbar otra vez: el verde no tapa un enlace caído.
+    tarde = _client(db_path, _FrozenClock(NOW + timedelta(minutes=20)), _config())
+    assert tarde.get("/api/overview").json()["staleness"]["positions"]["stale"] is True
 
 
 # ---------------------------------------------------------------------------
